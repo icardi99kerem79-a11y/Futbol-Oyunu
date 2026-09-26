@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>1v1 Mobil Futbol Maçı</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+        canvas {
+            background-color: #27ae60;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        window.onload = function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const W = 360;
+            const H = 640;
+            canvas.width = W;
+            canvas.height = H;
+
+            function scaleCanvas() {
+                const w = window.innerWidth || document.documentElement.clientWidth || W;
+                const h = window.innerHeight || document.documentElement.clientHeight || H;
+                const ratio = Math.min(w / W, h / H);
+                canvas.style.width = (W * ratio) + "px";
+                canvas.style.height = (H * ratio) + "px";
+            }
+            window.addEventListener('resize', scaleCanvas);
+            scaleCanvas();
+
+            let oyuncuSkor = 0;
+            let rakipSkor = 0;
+            let golMesaji = "";
+
+            const kaleG = 120;
+            const kaleX1 = (W - kaleG) / 2;
+            const kaleX2 = kaleX1 + kaleG;
+            const kaleDerinlik = 15;
+
+            const oyuncu = { x: W / 2, y: H - 120, r: 16, renk: '#3498db', hiz: 4.5 };
+            const rakip = { x: W / 2, y: 120, r: 16, renk: '#e74c3c', hiz: 2.8 };
+            const top = { x: W / 2, y: H / 2, vX: 0, vY: 0, r: 10, renk: '#ffffff', surtunme: 0.96 };
+
+            const joyBase = { x: 70, y: H - 80, r: 40 };
+            const joyKnob = { x: 70, y: H - 80, r: 20 };
+            let joyTouchId = null;
+            let moveX = 0;
+            let moveY = 0;
+
+            const sutBtn = { x: W - 60, y: H - 80, r: 32 };
+            const kaymaBtn = { x: W - 135, y: H - 80, r: 32 };
+
+            function getTouchPos(touch) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = W / rect.width;
+                const scaleY = H / rect.height;
+                return {
+                    x: (touch.clientX - rect.left) * scaleX,
+                    y: (touch.clientY - rect.top) * scaleY
+                };
+            }
+
+            function updateJoystick(tx, ty) {
+                let dx = tx - joyBase.x;
+                let dy = ty - joyBase.y;
+                let dist = Math.hypot(dx, dy);
+                let maxR = joyBase.r;
+
+                if (dist > maxR) {
+                    dx = (dx / dist) * maxR;
+                    dy = (dy / dist) * maxR;
+                }
+
+                joyKnob.x = joyBase.x + dx;
+                joyKnob.y = joyBase.y + dy;
+                moveX = dx / maxR;
+                moveY = dy / maxR;
+            }
+
+            function sutCek() {
+                if (golMesaji !== "") return;
+                let dx = top.x - oyuncu.x;
+                let dy = top.y - oyuncu.y;
+                let dist = Math.hypot(dx, dy);
+
+                if (dist < oyuncu.r + top.r + 35) {
+                    let angle = Math.atan2(dy, dx);
+                    top.vX = Math.cos(angle) * 15;
+                    top.vY = Math.sin(angle) * 15;
+                }
+            }
+
+            function topKap() {
+                if (golMesaji !== "") return;
+                let dx = top.x - oyuncu.x;
+                let dy = top.y - oyuncu.y;
+                let dist = Math.hypot(dx, dy);
+
+                if (dist < 120) {
+                    oyuncu.x += (dx / dist) * 25;
+                    oyuncu.y += (dy / dist) * 25;
+                }
+            }
+
+            canvas.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    let t = e.changedTouches[i];
+                    let pos = getTouchPos(t);
+
+                    let jDx = pos.x - joyBase.x;
+                    let jDy = pos.y - joyBase.y;
+                    if (Math.hypot(jDx, jDy) < joyBase.r + 30 && joyTouchId === null) {
+                        joyTouchId = t.identifier;
+                        updateJoystick(pos.x, pos.y);
+                    }
+
+                    let sDx = pos.x - sutBtn.x;
+                    let sDy = pos.y - sutBtn.y;
+                    if (Math.hypot(sDx, sDy) < sutBtn.r + 10) {
+                        sutCek();
+                    }
+
+                    let kDx = pos.x - kaymaBtn.x;
+                    let kDy = pos.y - kaymaBtn.y;
+                    if (Math.hypot(kDx, kDy) < kaymaBtn.r + 10) {
+                        topKap();
+                    }
+                }
+            }, {passive: false});
+
+            canvas.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+                for (let i = 0; i < e.touches.length; i++) {
+                    let t = e.touches[i];
+                    if (t.identifier === joyTouchId) {
+                        let pos = getTouchPos(t);
+                        updateJoystick(pos.x, pos.y);
+                    }
+                }
+            }, {passive: false});
+
+            canvas.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === joyTouchId) {
+                        joyTouchId = null;
+                        moveX = 0;
+                        moveY = 0;
+                        joyKnob.x = joyBase.x;
+                        joyKnob.y = joyBase.y;
+                    }
+                }
+            }, {passive: false});
+
+            function santra() {
+                top.x = W / 2;
+                top.y = H / 2;
+                top.vX = 0;
+                top.vY = 0;
+                oyuncu.x = W / 2;
+                oyuncu.y = H - 120;
+                rakip.x = W / 2;
+                rakip.y = 120;
+                golMesaji = "";
+            }
+
+            function guncelle() {
+                if (golMesaji !== "") return;
+
+                oyuncu.x += moveX * oyuncu.hiz;
+                oyuncu.y += moveY * oyuncu.hiz;
+                oyuncu.x = Math.max(oyuncu.r, Math.min(W - oyuncu.r, oyuncu.x));
+                oyuncu.y = Math.max(oyuncu.r, Math.min(H - oyuncu.r, oyuncu.y));
+
+                let rDx = top.x - rakip.x;
+                let rDy = top.y - rakip.y;
+                let rDist = Math.hypot(rDx, rDy);
+                if (rDist > 4) {
+                    rakip.x += (rDx / rDist) * rakip.hiz;
+                    rakip.y += (rDy / rDist) * rakip.hiz;
+                }
+
+                top.x += top.vX;
+                top.y += top.vY;
+                top.vX *= top.surtunme;
+                top.vY *= top.surtunme;
+
+                if (top.y - top.r <= 0) {
+                    if (top.x >= kaleX1 && top.x <= kaleX2) {
+                        oyuncuSkor++;
+                        golMesaji = "GOL!";
+                        setTimeout(santra, 1500);
+                    } else {
+                        top.y = top.r;
+                        top.vY *= -0.8;
+                    }
+                }
+
+                if (top.y + top.r >= H) {
+                    if (top.x >= kaleX1 && top.x <= kaleX2) {
+                        rakipSkor++;
+                        golMesaji = "YEDİK!";
+                        setTimeout(santra, 1500);
+                    } else {
+                        top.y = H - top.r;
+                        top.vY *= -0.8;
+                    }
+                }
+
+                if (top.x - top.r < 0) { top.x = top.r; top.vX *= -0.8; }
+                if (top.x + top.r > W) { top.x = W - top.r; top.vX *= -0.8; }
+
+                const katilimcilar = [oyuncu, rakip];
+                for (let i = 0; i < katilimcilar.length; i++) {
+                    let p = katilimcilar[i];
+                    let dx = top.x - p.x;
+                    let dy = top.y - p.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist < p.r + top.r) {
+                        let angle = Math.atan2(dy, dx);
+                        top.vX = Math.cos(angle) * 5;
+                        top.vY = Math.sin(angle) * 5;
+                    }
+                }
+            }
+
+            function ciz() {
+                ctx.fillStyle = "#27ae60";
+                ctx.fillRect(0, 0, W, H);
+
+                ctx.strokeStyle = "rgba(255,255,255,0.7)";
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                ctx.arc(W / 2, H / 2, 45, 0, Math.PI * 2);
+                ctx.moveTo(0, H / 2);
+                ctx.lineTo(W, H / 2);
+                ctx.stroke();
+
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 4;
+                ctx.strokeRect(kaleX1, 0, kaleG, kaleDerinlik);
+                ctx.strokeRect(kaleX1, H - kaleDerinlik, kaleG, kaleDerinlik);
+
+                ctx.fillStyle = "rgba(0,0,0,0.5)";
+                ctx.fillRect(W / 2 - 75, 20, 150, 30);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 14px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("RAKİP: " + rakipSkor + " - SİZ: " + oyuncuSkor, W / 2, 40);
+
+                // Top
+                ctx.beginPath();
+                ctx.arc(top.x, top.y, top.r, 0, Math.PI * 2);
+                ctx.fillStyle = top.renk;
+                ctx.fill();
+                ctx.strokeStyle = "#000";
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Oyuncu (Mavi)
+                ctx.beginPath();
+                ctx.arc(oyuncu.x, oyuncu.y, oyuncu.r, 0, Math.PI * 2);
+                ctx.fillStyle = oyuncu.renk;
+                ctx.fill();
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Rakip (Kırmızı)
+                ctx.beginPath();
+                ctx.arc(rakip.x, rakip.y, rakip.r, 0, Math.PI * 2);
+                ctx.fillStyle = rakip.renk;
+                ctx.fill();
+                ctx.strokeStyle = "#fff";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Joystick
+                ctx.beginPath();
+                ctx.arc(joyBase.x, joyBase.y, joyBase.r, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(joyKnob.x, joyKnob.y, joyKnob.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+
+                // ŞUT Butonu
+                ctx.beginPath();
+                ctx.arc(sutBtn.x, sutBtn.y, sutBtn.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#e74c3c";
+                ctx.fill();
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 13px sans-serif";
+                ctx.fillText("ŞUT", sutBtn.x, sutBtn.y + 5);
+
+                // KAP Butonu
+                ctx.beginPath();
+                ctx.arc(kaymaBtn.x, kaymaBtn.y, kaymaBtn.r, 0, Math.PI * 2);
+                ctx.fillStyle = "#2980b9";
+                ctx.fill();
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 13px sans-serif";
+                ctx.fillText("KAP", kaymaBtn.x, kaymaBtn.y + 5);
+
+                // Gol Mesajı
+                if (golMesaji !== "") {
+                    ctx.fillStyle = "#f1c40f";
+                    ctx.font = "900 42px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText(golMesaji, W / 2, H / 2 - 20);
+                }
+            }
+
+            function dongu() {
+                guncelle();
+                ciz();
+                requestAnimationFrame(dongu);
+            }
+
+            dongu();
+        };
+    </script>
+</body>
+  </html>
+  
